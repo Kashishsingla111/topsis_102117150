@@ -1,0 +1,82 @@
+import sys
+import pandas as pd
+import numpy as np
+
+def topsis(input, weights, impacts, output):
+    try:
+        data = pd.read_csv(input, index_col=0)
+
+        # Check if weights, impacts, and columns count match
+        if len(weights) != len(impacts) or len(weights) != (data.shape[1] - 1):
+            raise ValueError("Number of weights, impacts, and columns must match.")
+
+        # Convert weights and impacts strings to lists
+        weights = list(map(float, weights.split(',')))
+        impacts = impacts.split(',')
+
+         # Validate numeric values in the input file
+        numeric_columns = data.iloc[:, 1:].applymap(np.isreal).all()
+        if not numeric_columns.all():
+            raise ValueError("Non-numeric values found in the data. Please check your input file.")
+
+
+        # Check if the number of weights, impacts, and columns match
+        if len(weights) != len(impacts) or len(weights) != (data.shape[1] - 1):
+            raise ValueError("Number of weights, impacts, and columns must match.")
+
+        # Normalisation
+        norm_data = data.copy()
+        for col in data.columns[1:]:
+            norm_data[col] = data[col] / np.linalg.norm(data[col])
+
+        # Weighted normalized decision matrix
+        weighted_norm_data = norm_data.copy()
+        for col, weight in zip(data.columns[1:], weights):
+            weighted_norm_data[col] *= weight
+
+        # Ideal best and worst solutions
+        ideal_best = weighted_norm_data.max()
+        ideal_worst = weighted_norm_data.min()
+
+        # Calculate separation measures
+        s_plus = np.linalg.norm(weighted_norm_data - ideal_best, axis=1)
+        s_minus = np.linalg.norm(weighted_norm_data - ideal_worst, axis=1)
+
+        # Calculate Topsis score
+        topsis_score = s_minus / (s_plus + s_minus)
+
+        # Calculate rank
+        rank = topsis_score.rank(ascending=False)
+
+        # Add Topsis Score and Rank columns to the original data
+        data['Topsis Score'] = topsis_score
+        data['Rank'] = rank.astype(int)
+
+        # Save the result to the output file
+        data.to_csv(output)
+
+        print(f"Result saved to {output}")
+
+    except FileNotFoundError:
+        print("File not found. Please provide a valid input file.")
+    except pd.errors.EmptyDataError:
+        print("Input file is empty.")
+    except pd.errors.ParserError:
+        print("Error parsing the input file. Ensure it is in a valid CSV format.")
+    except ValueError as e:
+        print(f"Error: {e}")
+        print("Please check the input parameters and try again.")
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+
+if __name__ == "__main__":
+    if len(sys.argv) != 5:
+        print("Usage: python <program.py> <InputDataFile> <Weights> <Impacts> <ResultFileName>")
+        sys.exit(1)
+
+    input_file = sys.argv[1]
+    weights = sys.argv[2]
+    impacts = sys.argv[3]
+    output_file = sys.argv[4]
+
+    topsis(input, weights, impacts, output)
